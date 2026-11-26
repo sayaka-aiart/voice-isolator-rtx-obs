@@ -49,6 +49,7 @@ class Engine {
         bridge.publish(written, static_cast<int>(n), mono.data(), nullptr);
         written += n;
         accepted.fetch_add(n, std::memory_order_relaxed);
+        awaitResult(n);
         const auto ready = std::min(written, bridge.wetEnd());
         const auto count = static_cast<unsigned>(std::clamp<int64_t>(ready - emitted, 0, maxBatch));
         if (!count) {
@@ -78,7 +79,28 @@ class Engine {
     }
 
   private:
+    // The worker needs a few milliseconds for the frame a block completes. Waiting for it
+    // here returns the result in this callback instead of the next one. The wait takes at
+    // most 90% of the block, so the audio thread is back before the next block is due. One
+    // that runs out is a strike and a result in time takes a strike back. After three close
+    // together the waiting stops, so a GPU that is too slow leaves the timing as it was
+    // without the wait, one callback behind. It resumes once the worker's slowest recent
+    // frames have been within the allowance for 25 blocks in a row.
+    void awaitResult(unsigned n) {
+        const int64_t allowance = std::clamp<int64_t>(900000LL * n / rate, 1000, 20000);
+        if (strikes < strikeLimit) {
+            if (bridge.waitSettled(written, allowance))
+                strikes = std::max(0, strikes - 1);
+            else if ((strikes += strikeStep) >= strikeLimit)
+                strikes = 2 * strikeLimit;
+        } else {
+            strikes = bridge.peakMicros() <= allowance ? strikes - 1 : 2 * strikeLimit;
+        }
+    }
+
     static constexpr unsigned maxBatch = 32768;
+    static constexpr int strikeStep = 8, strikeLimit = 24;
+    int strikes{};
     isolator::Bridge bridge;
     unsigned rate;
     std::vector<float> dry;

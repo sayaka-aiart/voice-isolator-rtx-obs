@@ -23,6 +23,7 @@ static fs::path modulePath() {
     return fs::path(path);
 }
 static void dispose(HANDLE& h) { if (h) { CloseHandle(h); h = nullptr; } }
+constexpr DWORD highResolutionTimer = 2; // CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, absent from older SDKs
 
 bool Bridge::start(double sampleRate) {
     close();
@@ -58,6 +59,9 @@ bool Bridge::start(double sampleRate) {
         inputEvent = CreateEventW(nullptr, FALSE, FALSE, (name + L"-input").c_str());
         outputEvent = CreateEventW(nullptr, FALSE, FALSE, (name + L"-output").c_str());
         if (!shared || !inputEvent || !outputEvent) { close(); return false; }
+        // Ends a wait at its deadline rather than at the next 15.6 ms system tick.
+        // Without it (before Windows 10 1803) waitSettled rounds to milliseconds.
+        timer = CreateWaitableTimerExW(nullptr, nullptr, highResolutionTimer, TIMER_ALL_ACCESS);
         store(Magic, protocol);
         job = CreateJobObjectW(nullptr, nullptr);
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
@@ -89,7 +93,7 @@ void Bridge::close() {
     if (inputEvent) SetEvent(inputEvent);
     if (process) WaitForSingleObject(process, 200);
     dispose(job); // also reaps a Python venv launcher's child on host shutdown
-    dispose(process); dispose(inputEvent); dispose(outputEvent);
+    dispose(process); dispose(inputEvent); dispose(outputEvent); dispose(timer);
     if (shared) { UnmapViewOfFile(shared); shared = nullptr; }
     dispose(mapping);
     epoch = 0; origin = 0;
@@ -130,5 +134,31 @@ void Bridge::waitWet(int64_t target) {
     const auto deadline = GetTickCount64() + 15000;
     while (wetEnd() < target && state() == 1 && GetTickCount64() < deadline)
         WaitForSingleObject(outputEvent, 20);
+}
+int64_t Bridge::settled() const {
+    return shared && epoch && read(WetEpoch) == epoch ? read(Settled) : origin;
+}
+bool Bridge::waitSettled(int64_t target, int64_t micros) {
+    if (!shared) return false;
+    LARGE_INTEGER frequency, now;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&now);
+    const int64_t deadline = now.QuadPart + micros * frequency.QuadPart / 1000000;
+    while (settled() < target) {
+        QueryPerformanceCounter(&now);
+        const int64_t left = (deadline - now.QuadPart) * 10000000 / frequency.QuadPart; // 100 ns units
+        if (left <= 0 || state() != 1) return false;
+        // The worker signals the event for every frame and once more when it is done.
+        const DWORD limit = static_cast<DWORD>(left / 10000 + 1);
+        LARGE_INTEGER due;
+        due.QuadPart = -left;
+        if (timer && SetWaitableTimer(timer, &due, 0, nullptr, nullptr, FALSE)) {
+            const HANDLE either[] = {outputEvent, timer};
+            WaitForMultipleObjects(2, either, FALSE, limit + 1);
+        } else {
+            WaitForSingleObject(outputEvent, limit);
+        }
+    }
+    return true;
 }
 }

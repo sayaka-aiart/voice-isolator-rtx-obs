@@ -5,11 +5,13 @@ import mmap
 import os
 from pathlib import Path
 import sys
+import time
 import traceback
 
 CAPACITY = 1 << 18
 HEADER = 128
-MAGIC, STOP, STATE, EPOCH, ORIGIN, INPUT_END, CONSUMED, WET_EPOCH, WET_END, PID, ADVANCE_MODE = range(11)
+(MAGIC, STOP, STATE, EPOCH, ORIGIN, INPUT_END, CONSUMED, WET_EPOCH, WET_END, PID, ADVANCE_MODE,
+ SETTLED, PEAK_MICROS) = range(13)
 ADVANCE_HOPS = (1.0, 1.5, 2.0)  # Default, 5 ms earlier, 10 ms earlier at a 480-sample hop.
 FIRST_FRAME, HOP = 1024, 480  # Samples the model needs for its first frame and for each later one.
 
@@ -30,7 +32,7 @@ class Shared:
         self.win.SetEvent.argtypes = [ct.c_void_p]
         self.input_event = self.win.OpenEventW(0x100000, 0, name + "-input")
         self.output_event = self.win.OpenEventW(2, 0, name + "-output")
-        if self.get(MAGIC) != 0x495749333802 or not self.input_event or not self.output_event:
+        if self.get(MAGIC) != 0x495749333803 or not self.input_event or not self.output_event:
             raise RuntimeError("VST3 IPC protocol mismatch")
 
     def get(self, key):
@@ -171,6 +173,7 @@ def run(shared, root, rate, packaged=False):
         shared.notify()
         previous = None
         used = False
+        peak = 0.0
         while not shared.get(STOP):
             epoch = shared.get(EPOCH)
             if not epoch or epoch & 1:
@@ -189,11 +192,13 @@ def run(shared, root, rate, packaged=False):
                 used = False
                 resample_in, resample_out = RateConverter(np, rate, 48000), RateConverter(np, 48000, rate)
                 read = emitted = origin
-                pending = None
+                pending = np.empty(0, np.float32)
+                skip = None  # Chosen with the first delivery.
                 needed = FIRST_FRAME
                 previous = epoch
                 shared.set(CONSUMED, read)
                 shared.set(WET_END, emitted)
+                shared.set(SETTLED, read)
                 shared.set(WET_EPOCH, epoch)
             available = shared.get(INPUT_END) - read
             if shared.get(EPOCH) != epoch:
@@ -201,6 +206,7 @@ def run(shared, root, rate, packaged=False):
             if available <= 0:
                 shared.win.WaitForSingleObject(shared.input_event, 50)
                 continue
+            began = time.perf_counter()
             n = min(available, 4096, CAPACITY - read % CAPACITY)
             x = input_ring[read % CAPACITY:read % CAPACITY+n].copy()
             if shared.get(EPOCH) != epoch:
@@ -208,17 +214,17 @@ def run(shared, root, rate, packaged=False):
             read += n
             shared.set(CONSUMED, read)
             fresh = resample_in.push(x)
-            if pending is None:
-                if not len(fresh):
-                    continue
+            if skip is None and len(fresh):
                 # The output for the silence in front belongs to no input sample.
                 skip = lead_in(len(fresh))
                 pending = np.zeros(skip, np.float32)
             pending = np.concatenate((pending, fresh))
+            frames = 0
             while len(pending) >= needed and shared.get(EPOCH) == epoch and not shared.get(STOP):
                 clean = session.push(pending[:needed])
                 pending = pending[needed:]
                 needed, used = HOP, True
+                frames += 1
                 if skip:
                     dropped = min(skip, len(clean))
                     clean, skip = clean[dropped:], skip - dropped
@@ -231,6 +237,16 @@ def run(shared, root, rate, packaged=False):
                     emitted += len(y)
                     shared.set(WET_END, emitted)
                     shared.notify()
+            # Everything these samples allow has been computed. A host that waits for
+            # the result in the call that delivered them can stop waiting now. To decide
+            # whether waiting is worthwhile it reads how long the slowest recent frames
+            # took. That figure fades by 3% per batch, so one slow frame is still on
+            # record when the host looks, a few fast ones later.
+            if frames:
+                peak = max((time.perf_counter() - began) * 1e6, peak * 0.97)
+                shared.set(PEAK_MICROS, round(peak))
+            shared.set(SETTLED, read)
+            shared.notify()
 
 
 if __name__ == "__main__":
