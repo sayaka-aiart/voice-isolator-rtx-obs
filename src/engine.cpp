@@ -33,7 +33,7 @@ class Engine {
             written + n - emitted > capacity - 2048) {
             if (streaming)
                 discarded.fetch_add(written - emitted);
-            bridge.reset(written, advance);
+            bridge.reset(written, advance, n);
             emitted = written;
             previousAdvance = advance;
             fade = 0;

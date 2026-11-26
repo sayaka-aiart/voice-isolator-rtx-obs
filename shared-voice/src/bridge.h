@@ -5,9 +5,9 @@
 
 namespace isolator {
 constexpr int64_t capacity = 1 << 18;
-constexpr int64_t protocol = 0x495749333803LL;
+constexpr int64_t protocol = 0x495749333804LL;
 enum Field { Magic, Stop, State, Epoch, Origin, InputEnd, Consumed, WetEpoch, WetEnd, Pid, AdvanceMode,
-             Settled, PeakMicros, NumFields };
+             Settled, PeakMicros, FirstPacketFrames, NumFields };
 struct alignas(64) Shared {
     volatile LONG64 h[16];
     float input[capacity];
@@ -21,7 +21,7 @@ public:
     bool start(double sampleRate);
     void close();
     int state() const;
-    void reset(int64_t cursor, int64_t advanceMode);
+    void reset(int64_t cursor, int64_t advanceMode, int64_t firstPacketFrames);
     void publish(int64_t first, int count, const float* left, const float* right);
     int64_t wetEnd() const;
     float wet(int64_t pos) const { return shared->output[pos & (capacity - 1)]; }
