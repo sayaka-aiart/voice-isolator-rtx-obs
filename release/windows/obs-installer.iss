@@ -63,7 +63,10 @@ Source: "{#Docs}\LICENSES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Root: HKCU64; Subkey: "Software\Local Audio Lab\Voice Isolator RTX"; ValueType: string; ValueName: "EngineRoot"; ValueData: "{code:EngineDir}"; Flags: uninsdeletevalue; Check: RegisterEngine
 
 [INI]
-Filename: "{app}\owner.ini"; Section: "Engine"; Key: "Directory"; String: "{code:EngineDir}"; Flags: uninsdeleteentry uninsdeletesectionifempty uninsdeletefileifempty; Check: CopyOwnedEngine
+Filename: "{app}\owner.ini"; Section: "Engine"; Key: "Directory"; String: "{code:EngineDir}"; Check: CopyOwnedEngine
+
+[UninstallDelete]
+Type: files; Name: "{app}\owner.ini"
 
 [Code]
 var
