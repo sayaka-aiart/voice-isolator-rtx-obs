@@ -14,17 +14,17 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "inworld"))
 
 
-def precheck(destination):
+def precheck(destination, scratch_bytes=14_000_000_000, install_bytes=10_000_000_000):
     if Path(sys.prefix).resolve() != ROOT / "python":
         raise RuntimeError("The private Python runtime is required.")
     # During setup the wheels, staged engine, and installed copy can coexist.
     if ROOT.drive.casefold() == destination.drive.casefold():
-        needed = [(ROOT, 23_000_000_000)]
+        needed = [(ROOT, scratch_bytes + install_bytes)]
     else:
-        needed = [(ROOT, 14_000_000_000), (Path(destination.anchor), 10_000_000_000)]
+        needed = [(ROOT, scratch_bytes), (Path(destination.anchor), install_bytes)]
     for path, size in needed:
         if shutil.disk_usage(path).free < size:
-            raise RuntimeError(f"Setup needs {size / 1e9:.0f} GB free on {path.drive}.")
+            raise RuntimeError(f"Setup needs {size / 1e9:.1f} GB free on {path.drive}.")
     for name in ("msvcp140.dll", "vcruntime140_1.dll"):
         try:
             ctypes.WinDLL(name, winmode=0x800)  # LOAD_LIBRARY_SEARCH_SYSTEM32

@@ -53,12 +53,17 @@ en.Failed=See the setup log for details.
 [Files]
 Source: "{#Bootstrap}"; Flags: dontcopy
 Source: "{#ModuleSetup}"; DestName: "obs-module-setup.exe"; Flags: dontcopy
-Source: "{tmp}\engine\*"; DestDir: "{code:EngineDir}"; Excludes: "\cache\*,\python\Scripts\*,*.pyc,setup_assets.py"; ExternalSize: 9_000_000_000; Flags: external recursesubdirs ignoreversion; Check: CopyEngine
+#define EngineExcludes "\cache\*,\python\Scripts\*,*.pyc,setup_assets.py"
+Source: "{tmp}\engine\*"; DestDir: "{code:EngineDir}"; Excludes: "{#EngineExcludes}"; ExternalSize: 0; Flags: external recursesubdirs ignoreversion; Check: CopyOwnedEngine
+Source: "{tmp}\engine\*"; DestDir: "{code:EngineDir}"; Excludes: "{#EngineExcludes}"; ExternalSize: 0; Flags: external recursesubdirs ignoreversion uninsneveruninstall; Check: RepairOtherEngine
 Source: "{#Docs}\はじめに.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#Docs}\LICENSES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Registry]
 Root: HKCU64; Subkey: "Software\Local Audio Lab\Voice Isolator RTX"; ValueType: string; ValueName: "EngineRoot"; ValueData: "{code:EngineDir}"; Flags: uninsdeletevalue; Check: RegisterEngine
+
+[INI]
+Filename: "{app}\owner.ini"; Section: "Engine"; Key: "Directory"; String: "{code:EngineDir}"; Flags: uninsdeleteentry uninsdeletesectionifempty uninsdeletefileifempty; Check: CopyOwnedEngine
 
 [Code]
 var
@@ -67,15 +72,19 @@ var
   Progress: TOutputMarqueeProgressWizardPage;
   Needed: TStringList;
   Engine, LogPath: String;
-  Reuse, HadRegisteredEngine: Boolean;
+  Reuse, HadRegisteredEngine, OwnsEngine: Boolean;
 
 function EngineDir(Param: String): String;
 begin
   Result := Engine;
 end;
-function CopyEngine: Boolean;
+function CopyOwnedEngine: Boolean;
 begin
-  Result := not Reuse;
+  Result := not Reuse and OwnsEngine;
+end;
+function RepairOtherEngine: Boolean;
+begin
+  Result := not Reuse and not OwnsEngine;
 end;
 function RegisterEngine: Boolean;
 begin
@@ -90,6 +99,8 @@ begin
   HadRegisteredEngine := RegQueryStringValue(HKCU64, 'Software\Local Audio Lab\Voice Isolator RTX', 'EngineRoot', Engine) and DirExists(Engine);
   if not HadRegisteredEngine then
     Engine := ExpandConstant('{localappdata}\Programs\VoiceIsolatorRTX\engine-1.0.0');
+  OwnsEngine := (not HadRegisteredEngine and not FileExists(Engine + '\python\python.exe')) or
+    (CompareText(GetIniString('Engine', 'Directory', '', ExpandConstant('{localappdata}\Programs\VoiceIsolatorRTX\OBS-Setup\owner.ini')), Engine) = 0);
   ModelPage := CreateInputFilePage(wpWelcome, CustomMessage('Model'), CustomMessage('ModelInfo'), CustomMessage('ModelHelp'));
   ModelPage.Add('Inworld Voice Isolator', 'SafeTensors|*.safetensors', '.safetensors');
   ModelPage.Values[0] := ExpandConstant('{param:MODEL|}');
@@ -138,6 +149,7 @@ begin
       Progress.SetText(CustomMessage('Check'), '');
       Progress.Animate;
       ExtractTemporaryFile('bootstrap.zip');
+      if DirExists(StageDir) and not DelTree(StageDir, True, True, True) then RaiseException('Cannot reset temporary engine directory');
       if not ForceDirectories(StageDir) then RaiseException('Cannot create staging directory');
       RunChecked(ExpandConstant('{sys}\tar.exe'), '-xf ' + Q(TempDir + '\bootstrap.zip') + ' -C ' + Q(StageDir), TempDir);
       DeleteFile(TempDir + '\reuse.ok');

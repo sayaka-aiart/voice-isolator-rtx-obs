@@ -104,8 +104,8 @@ def plan(engine, setup_dir, selected):
     core = [p.relative_to(ROOT) for p in (ROOT / "inworld").rglob("*.py")]
     core.append(Path("assets.lock.json"))
     existing = (engine / "python/python.exe").is_file() and (engine / "prepare.py").is_file()
-    complete = (existing and not need and target.is_file() and
-                (model == target.resolve() or sha(target) == LOCK["model"]["sha256"]) and
+    target_valid = target.is_file() and (model == target.resolve() or sha(target) == LOCK["model"]["sha256"])
+    complete = (existing and not need and target_valid and
                 all((engine / p).is_file() and sha(engine / p) == sha(ROOT / p) for p in core))
     if complete:
         # Try the real private runtime before committing to offline reuse.
@@ -113,9 +113,15 @@ def plan(engine, setup_dir, selected):
                 "diagnose", str(engine), str(LOG)]
         complete = subprocess.run(args, check=False).returncode == 0
     if not complete:
-        prepare.precheck(engine)
+        wheel_bytes = sum(w["bytes"] for w in LOCK["wheels"] if w["filename"] in need)
+        install_bytes = min(10_000_000_000, 470_000_000 + 3 * wheel_bytes)
+        scratch_bytes = min(14_000_000_000, 1_500_000_000 + 4 * wheel_bytes)
+        if engine.drive.casefold() != ROOT.drive.casefold() and keep:
+            scratch_bytes = 14_000_000_000
+        prepare.precheck(engine, scratch_bytes, install_bytes)
     (ROOT.parent / "asset-plan.json").write_text(json.dumps(
-        dict(keep=keep, need=need, model=str(model) if model else None, complete=complete)), encoding="utf-8")
+        dict(keep=keep, need=need, model=str(model) if model else None,
+             preserve_model=target_valid, complete=complete)), encoding="utf-8")
     (ROOT.parent / "need.txt").write_text("\n".join(need), encoding="ascii")
     if complete:
         (ROOT.parent / "reuse.ok").touch()
@@ -165,6 +171,8 @@ def stage(engine):
     # Existing libraries stay in their original location and keep their original installer ownership.
     for path in linked:
         path.unlink()
+    if data["preserve_model"]:
+        dest.unlink()
 
 
 if __name__ == "__main__":
