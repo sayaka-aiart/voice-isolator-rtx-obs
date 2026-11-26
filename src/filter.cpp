@@ -31,7 +31,7 @@ struct Filter {
     }
 };
 const char *name(void *) {
-    return "Voice Isolator RTX";
+    return "Voice Isolator RTX OBS";
 }
 
 void update(void *data, obs_data_t *settings) {
@@ -151,8 +151,9 @@ obs_properties_t *properties(void *data) {
 }
 } // namespace
 MODULE_EXPORT const char *obs_module_description(void) {
-    return "Voice Isolator RTX native microphone filter";
+    return "Voice Isolator RTX OBS microphone filter";
 }
+MODULE_EXPORT const char *obs_module_name(void) { return "Voice Isolator RTX OBS"; }
 bool obs_module_load(void) {
     obs_source_info info{};
     info.id = "voice_isolator_rtx_native";

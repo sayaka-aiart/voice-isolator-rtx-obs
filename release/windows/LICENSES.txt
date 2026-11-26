@@ -1,0 +1,29 @@
+Voice Isolator RTX OBS 1.3.0　ライセンス・対応ソース
+
+OBSフィルターとネイティブアダプター
+  voice-isolator-rtx.dll、voice-rtx-engine.dll およびOBS版の配布スクリプトを
+  GPL-2.0-or-laterで提供します。本文は licenses/OBS-GPL-2.0.txt にあります。
+  対応ソース、ビルド・インストールスクリプトは source/VoiceIsolatorRTX-OBS-source.zip、
+  および https://github.com/sayaka-aiart/voice-isolator-rtx-obs/tree/v1.3.0 にあります。
+  インストールしたプラグインの data/licenses フォルダーにも対応ソースが入ります。
+  バイナリを再配布するときは配布する版に対応するソースの提供条件に従い、
+  元の著作権・ライセンス表示を保持してください。GPLの本文は第3条にバイナリ配布時の条件を定めています。
+
+共有コードとInworldモデル
+  IPCブリッジとGPUワーカーなどの自作共有部分はMIT Licenseです（licenses/VoiceIsolator-MIT.txt）。
+  Inworld Voice Isolatorの上流実装・モデルはApache-2.0です。
+  licenses/Inworld-LICENSE.txt と licenses/Inworld-NOTICE.txt を同梱します。
+  固定したモデル　https://huggingface.co/inworld/voice-isolator/tree/9b0285b3fe8403aa8e2f1dbb2165a80a4294c970
+  上流実装　https://github.com/inworld-ai/voice-isolator/tree/c73b3fab81a870410cbac50d2f05f25edc4d10aa
+
+実行環境とセットアップ
+  CPython 3.12.10は公式Windows x64 NuGetパッケージ由来です。PSFと付属物の
+  ライセンスは licenses/Python-LICENSE.txt と導入先の python/LICENSE.txt にあります。
+  Inno SetupはJordan RussellおよびMartijn Laanによるものです（licenses/Inno-Setup-LICENSE.txt）。
+  PyTorch、Triton for Windowsなどのライブラリは配布元のwheelから取得します。
+  CUDAライブラリにはPyTorch wheelに付属するNVIDIAの条件が適用されます。
+  SoundFileはBSD-3-Clause、同梱のlibsndfileはLGPLです。各依存物の元のライセンスは
+  推論環境の python/Lib/site-packages 内、版・SHA-256・配布元は assets.lock.json にあります。
+  https://pytorch.org/get-started/previous-versions/
+  https://github.com/triton-lang/triton-windows
+  https://docs.nvidia.com/cuda/eula/

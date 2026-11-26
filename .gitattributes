@@ -1,3 +1,5 @@
 * text=auto eol=lf
 src/** -text
 shared-voice/** -text
+inference/** -text
+release/windows/assets.lock.json -text

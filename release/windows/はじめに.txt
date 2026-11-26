@@ -1,0 +1,62 @@
+Voice Isolator RTX OBS 1.3.0　導入ガイド
+
+マイクの音に含まれる環境音を、PCのNVIDIA GPUで抑えるOBS Studio用の音声フィルターです。
+
+1　セットアップする
+  ① OBSを終了し、ダウンロードしたZIPを右クリックして「すべて展開」します。
+  ② OBSを使うWindowsユーザーで VoiceIsolatorRTX-OBS-1.3.0-Setup-x64.exe を起動します。
+  ③ 「既存モデルの指定」は通常は空欄のまま「次へ」を押します。モデルを別の場所に
+     保存している場合は「参照」から denoiser_realtime.safetensors を選べます。
+  ④ インストールを開始します。OBSの共通フォルダーに配置するときはWindowsの
+     管理者確認を許可してください。初回は短い音声でGPU処理を確認します。
+
+2　モデルとダウンロード
+  ・同じユーザーでVoice Isolator RTXの共通エンジンとモデルがそろっていれば、
+    セットアップはその場所を使います。追加ダウンロードは0件です。
+  ・モデルだけをお持ちの場合は、そのファイルを再利用して、不足するライブラリだけを取得します。
+    セットアップEXEと同じフォルダーに置くか、手順③で選んでください。
+  ・モデルがない場合は、Inworldの公式モデル（約233 MB）を自動で取得します。
+    共通環境もない初回の通信量はモデルとライブラリを合わせて約3.77 GBです。
+  ・再利用時とダウンロード時にSHA-256を照合します。ファイルの名前が同じでも、
+    手動で指定したモデルが対応版と一致しない場合は、指定を外してやり直してください。
+  ・自動検索先は登録済みの共通エンジン、標準のインストール先、セットアップEXEの隣
+    （models フォルダーも含む）、Hugging FaceのInworldモデルキャッシュです。
+    通常のモデル配置先は次のとおりです。
+    %LOCALAPPDATA%\Programs\VoiceIsolatorRTX\engine-1.0.0\inworld\models\denoiser_realtime.safetensors
+
+3　OBSでマイクに追加する
+  ① OBSの「音声ミキサー」で対象のマイクの「︙」または右クリックから「フィルタ」を開きます。
+  ② 「＋」から「Voice Isolator RTX OBS」を選びます。
+  ③ 「状態を更新」で「GPU 使用可能」を確認します。数秒しゃべって録音し、フィルターの
+     目のアイコンを切り替えると、適用前後を聞き比べられます。
+  ・除去の強さは100%・80%・50%です。初期値は100%。弱くすると原音を多く混ぜます。
+  ・合成の前倒しは0・5・10 msです。0 msが標準です。5 ms、10 msの順に遅延を短く
+    できますが、ささやき声や語尾の聞こえ方が変わることがあります。
+
+動作環境
+  Windows 10（1809以降）または11の64ビット版、OBS Studio 28以降の64ビット版、
+  CUDA 12.8対応ドライバーとNVIDIA RTX 30 / 40 / 50シリーズを想定しています。
+  検証機はGeForce RTX 4070です。Microsoft Visual C++ v14再頒布可能パッケージ
+  （x64）が必要です。PythonとCUDA Toolkitの個別導入は不要です。
+  初回は一時領域とインストール先が同じ場合25 GB、別の場合は各14 GBと10 GBを
+  目安に空きを用意してください。すべて再利用できる場合は大容量の再展開を省きます。
+  NVIDIAドライバー　https://www.nvidia.com/Download/index.aspx
+  VC++ x64 公式配布　https://aka.ms/vc14/vc_redist.x64.exe
+
+配置先・問題が起きたとき
+  通常インストール版のOBSを対象とします。OBS 28～32用の bin\64bit と、
+  OBS 33以降用の直下の両方にDLLを配置し、dataフォルダーを共有します。
+    %ProgramData%\obs-studio\plugins\voice-isolator-rtx
+  フィルターが一覧に出ない場合はOBSを完全に終了して起動し直してください。
+  セットアップに失敗したときは、エラー画面に表示されたログ、または
+  %TEMP%\VoiceIsolatorRTX-OBS-*.log で原因を確認できます。
+  削除はOBSを終了し、Windowsの「インストールされているアプリ」で
+  「Voice Isolator RTX OBS」を選びます。VST3や変換アプリで同じモデルを使う場合は
+  共通エンジンを残してください。今回インストールした共通環境も削除する場合は、
+  他で使用していないことを確認し、「Voice Isolator RTX OBS - 共通エンジンのセットアップ」
+  （英語表示では Shared engine setup）も削除します。
+
+ライセンスとソース
+  部品別の表記は LICENSES.txt を参照してください。OBS版の対応ソースは
+  source\VoiceIsolatorRTX-OBS-source.zip とGitHubの固定タグから取得できます。
+  https://github.com/sayaka-aiart/voice-isolator-rtx-obs/tree/v1.3.0

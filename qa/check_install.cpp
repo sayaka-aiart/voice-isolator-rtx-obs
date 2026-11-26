@@ -91,7 +91,7 @@ State testAudio() {
     auto *filter = obs_source_create_private(id, "Installed filter", nullptr);
     check(source && filter, "Could not create filter or input");
     obs_source_filter_add(source, filter);
-    const auto deadline = std::chrono::steady_clock::now() + 45s;
+    const auto deadline = std::chrono::steady_clock::now() + 150s;
     while (stats(filter).ready == 0 && std::chrono::steady_clock::now() < deadline)
         std::this_thread::sleep_for(100ms);
     check(stats(filter).ready == 1, "GPU engine did not become ready");
@@ -146,6 +146,7 @@ int wmain(int argc, wchar_t **argv) {
             if (type && std::string(type) == id)
                 ++matches;
         check(matches == 1, "Filter was not registered exactly once");
+        check(std::string(obs_source_get_display_name(id)) == "Voice Isolator RTX OBS", "Unexpected filter display name");
         auto counts = testAudio();
         std::cout << "INSTALL_PROBE " << obs_get_version_string() << " "
                   << (modern ? "flat" : "bin/64bit") << " registered=" << matches

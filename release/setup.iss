@@ -1,6 +1,6 @@
 [Setup]
 AppId={{84F2C516-752E-403B-B8A9-4EAEB7BD9263}
-AppName=Voice Isolator RTX for OBS
+AppName=Voice Isolator RTX OBS
 AppVersion={#ReleaseVersion}
 AppPublisher=Local Audio Lab
 DefaultDirName={commonappdata}\obs-studio\plugins\voice-isolator-rtx
@@ -19,7 +19,7 @@ OutputDir={#ReleaseDir}
 OutputBaseFilename=VoiceIsolatorRTX-OBS-{#ReleaseVersion}-Setup-x64
 VersionInfoVersion={#ReleaseVersion}.0
 VersionInfoDescription=Voice Isolator RTX audio filter for OBS Studio
-UninstallDisplayName=Voice Isolator RTX for OBS
+UninstallDisplayName=Voice Isolator RTX OBS
 UninstallFilesDir={code:UninstallerDir}
 CreateUninstallRegKey=IsAdminInstallMode
 SetupMutex=Local\VoiceIsolatorRTXOBSSetup
