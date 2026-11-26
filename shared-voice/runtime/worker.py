@@ -11,6 +11,7 @@ CAPACITY = 1 << 18
 HEADER = 128
 MAGIC, STOP, STATE, EPOCH, ORIGIN, INPUT_END, CONSUMED, WET_EPOCH, WET_END, PID, ADVANCE_MODE = range(11)
 ADVANCE_HOPS = (1.0, 1.5, 2.0)  # Default, 5 ms earlier, 10 ms earlier at a 480-sample hop.
+FIRST_FRAME, HOP = 1024, 480  # Samples the model needs for its first frame and for each later one.
 
 
 class Shared:
@@ -77,6 +78,21 @@ class RateConverter:
         self.samples = self.samples[keep - self.start:]
         self.start = keep
         return y
+
+
+def lead_in(first):
+    """Samples of silence to put before a stream so its frames end where the host's blocks end.
+
+    A frame is complete once 1024 + 480 k samples have arrived. A host that
+    delivers 480 samples at a time reaches 1440, 1920, ... instead, so every
+    frame would be finished 416 samples into the following block and its
+    result would reach the host one block (8.7 ms) later than it could. With
+    'first' samples in the first delivery, this much silence in front makes
+    the count a whole number of hops past the first frame at the end of that
+    delivery, and at the end of every later delivery of 480 samples. Other
+    block lengths keep the delay they would have had at some other phase.
+    """
+    return (FIRST_FRAME - first) % HOP
 
 
 def raise_priority():
@@ -173,8 +189,8 @@ def run(shared, root, rate, packaged=False):
                 used = False
                 resample_in, resample_out = RateConverter(np, rate, 48000), RateConverter(np, 48000, rate)
                 read = emitted = origin
-                pending = np.empty(0, np.float32)
-                needed = 1024
+                pending = None
+                needed = FIRST_FRAME
                 previous = epoch
                 shared.set(CONSUMED, read)
                 shared.set(WET_END, emitted)
@@ -191,11 +207,22 @@ def run(shared, root, rate, packaged=False):
                 continue
             read += n
             shared.set(CONSUMED, read)
-            pending = np.concatenate((pending, resample_in.push(x)))
+            fresh = resample_in.push(x)
+            if pending is None:
+                if not len(fresh):
+                    continue
+                # The output for the silence in front belongs to no input sample.
+                skip = lead_in(len(fresh))
+                pending = np.zeros(skip, np.float32)
+            pending = np.concatenate((pending, fresh))
             while len(pending) >= needed and shared.get(EPOCH) == epoch and not shared.get(STOP):
-                y = resample_out.push(session.push(pending[:needed]))
+                clean = session.push(pending[:needed])
                 pending = pending[needed:]
-                needed, used = 480, True
+                needed, used = HOP, True
+                if skip:
+                    dropped = min(skip, len(clean))
+                    clean, skip = clean[dropped:], skip - dropped
+                y = resample_out.push(clean)
                 if len(y):
                     pos = emitted % CAPACITY
                     first = min(len(y), CAPACITY - pos)
